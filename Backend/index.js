@@ -1,17 +1,22 @@
-// index.js
-const express = require('express');
-const app = express();
-const PORT = process.env.PORT || 3000;
+import express from "express";
+import path from "path";
+import dotenv from "dotenv";
+import OpenAIrouter from "./OpenAi/test.js";
 
-// Middleware
+dotenv.config();
+
+const app = express();
+const PORT = Number(process.env.PORT) || 3000;
+
 app.use(express.json());
 
-// Basic Route
-app.get('/', (req, res) => {
-  res.send('Hello from Express!');
+// mount router at /api
+app.use("/api", OpenAIrouter);
+
+app.get("/", (_req, res) => {
+  res.send("Hello from Express!");
 });
 
-// Start server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
 });
