@@ -38,7 +38,7 @@ export default function MicRecorder({ onTranscript }) {
         formData.append("file", file);
 
 
-        const response = await fetch("http://localhost:3001/api/whisper", {
+        const response = await fetch("/api/whisper", {
           method: "POST",
           body: formData,
         });

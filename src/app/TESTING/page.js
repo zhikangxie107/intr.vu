@@ -1,12 +1,20 @@
 'use client';
 
 import { useRef, useState } from 'react';
+import MicRecorder from '../components/MicRecorder'; // adjust path if needed
+
+// Centralize endpoints so you can change them in one place
+const ASK_ENDPOINT = '/api/ask';
+const TTS_ENDPOINT = '/api/tts/tts';   // use '/api/tts' if that's your route
+const STT_ENDPOINT = '/api/whisper';   // MicRecorder already posts here
 
 export default function TestPage() {
   const [value, setValue] = useState('');
   const [answer, setAnswer] = useState(null);
   const [loading, setLoading] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+  const [lastTranscript, setLastTranscript] = useState('');
+  const [autoAsk, setAutoAsk] = useState(true); // auto-send transcript to GPT+TTS
 
   const audioRef = useRef(null);
   const objectUrlRef = useRef(null);
@@ -36,7 +44,7 @@ export default function TestPage() {
 
     ttsAbortRef.current = new AbortController();
 
-    const res = await fetch('/api/tts/tts', {
+    const res = await fetch(TTS_ENDPOINT, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text }), // server will use default voice/model
@@ -58,20 +66,20 @@ export default function TestPage() {
     setSpeaking(true);
     audio.onended = () => {
       setSpeaking(false);
-      // keep URL for Replay; revoke on next cleanup
+      // Keep URL for Replay; revoked on next cleanup
     };
     await audio.play();
   };
 
-  const handleSubmit = async () => {
+  // Core ask -> speak pipeline
+  const askAndSpeak = async (promptText) => {
+    setLoading(true);
+    setAnswer(null);
     try {
-      setLoading(true);
-      setAnswer(null);
-
-      const res = await fetch('/api/ask', {
+      const res = await fetch(ASK_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: value }),
+        body: JSON.stringify({ prompt: promptText }),
       });
 
       if (!res.ok) {
@@ -83,7 +91,6 @@ export default function TestPage() {
       const textAnswer = typeof data === 'string' ? data : (data.answer ?? '');
       setAnswer(textAnswer || '(no answer)');
 
-      // Kick off TTS
       if (textAnswer) await speak(textAnswer);
     } catch (e) {
       console.error(e);
@@ -91,6 +98,22 @@ export default function TestPage() {
       cleanupAudio();
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Existing button flow
+  const handleSubmit = async () => {
+    const promptText = value.trim();
+    if (!promptText) return;
+    await askAndSpeak(promptText);
+  };
+
+  // NEW: Wire teammate’s MicRecorder -> transcript -> askAndSpeak (optional)
+  const handleTranscript = async (text) => {
+    setLastTranscript(text || '');
+    setValue(text || '');
+    if (autoAsk && text?.trim()) {
+      await askAndSpeak(text.trim());
     }
   };
 
@@ -104,6 +127,26 @@ export default function TestPage() {
     <div style={{ padding: 16, display: 'grid', gap: 12 }}>
       <h1>Interview Test</h1>
 
+      {/* Speech input (Mic) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <MicRecorder onTranscript={handleTranscript} />
+        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            type="checkbox"
+            checked={autoAsk}
+            onChange={(e) => setAutoAsk(e.target.checked)}
+          />
+          Auto-send transcript to interviewer
+        </label>
+      </div>
+
+      {lastTranscript ? (
+        <div style={{ fontSize: 13, opacity: 0.8 }}>
+          Last transcript:&nbsp;<em>{lastTranscript}</em>
+        </div>
+      ) : null}
+
+      {/* Text input fallback */}
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           type="text"
@@ -120,6 +163,7 @@ export default function TestPage() {
         </button>
       </div>
 
+      {/* LLM answer */}
       {answer && (
         <pre
           style={{
@@ -134,6 +178,7 @@ export default function TestPage() {
         </pre>
       )}
 
+      {/* Audio controls */}
       <div style={{ display: 'flex', gap: 8 }}>
         <button onClick={handleReplay} disabled={!answer || speaking || loading}>
           Replay
