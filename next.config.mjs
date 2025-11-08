@@ -1,7 +1,9 @@
+// next.config.mjs
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  /* config options here */
-  reactCompiler: true,
+  experimental: {
+    appDir: false, // Disable app/ directory
+  },
 };
 
 export default nextConfig;
