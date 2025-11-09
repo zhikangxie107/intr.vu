@@ -5,6 +5,7 @@ import { useEffect } from "react";
 
 export default function HomePage() {
   const { isAuthenticated, isLoading } = useAuth0();
+  console.log("This user is authenticated: " + isAuthenticated);
 
   // Redirect authenticated users to /learn
   useEffect(() => {
@@ -42,6 +43,8 @@ export default function HomePage() {
       </div>
     );
   }
+
+  
 
   return null; // avoids flashing content before redirect
 }

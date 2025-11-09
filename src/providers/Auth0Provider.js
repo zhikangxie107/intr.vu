@@ -10,6 +10,8 @@ export default function Auth0ProviderWrapper({ children }) {
         redirect_uri:
           typeof window !== "undefined" ? window.location.origin : "",
       }}
+      cacheLocation="localstorage"       
+      useRefreshTokens={true} 
     >
       {children}
     </Auth0Provider>

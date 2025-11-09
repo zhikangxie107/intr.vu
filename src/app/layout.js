@@ -1,3 +1,4 @@
+"use client";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import Auth0ProviderWrapper from "../providers/Auth0Provider";
@@ -12,10 +13,6 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata = {
-  title: "intr.vu",
-  description: "Hackathon project with Auth0 authentication",
-};
 
 export default function RootLayout({ children }) {
   return (
