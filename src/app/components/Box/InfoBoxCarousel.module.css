@@ -1,0 +1,52 @@
+.carousel {
+  position: relative;
+  width: 100%;
+}
+
+/* scrollable row */
+.viewport {
+  width: 100%;
+  overflow-x: auto;              /* keep scrolling */
+  overflow-y: hidden;
+  display: flex;
+  gap: var(--gap, 12px);
+
+  /* edge padding */
+  padding-inline: 24px;          /* tweak to taste (e.g., 16–32px) */
+  scroll-padding-inline: 24px;   /* keep snap aligned with padding */
+
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+
+  /* hide scrollbar */
+  scrollbar-width: none;         /* Firefox */
+  -ms-overflow-style: none;      /* old Edge/IE */
+}
+.viewport::-webkit-scrollbar { display: none; } /* Chrome/Safari/Edge */
+
+.slide {
+  flex: 0 0 auto;                /* multiple visible at once */
+  scroll-snap-align: start;
+  display: grid;
+  place-items: center;
+}
+
+/* dots */
+.dots {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  border: none;
+  cursor: pointer;
+}
+.dotActive {                      /* exported class so JS can toggle it */
+  background: #111827;
+}
