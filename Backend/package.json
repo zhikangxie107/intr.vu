@@ -4,6 +4,7 @@
   "main": "index.js",
   "type": "module",
   "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
     "openai": "^6.8.1",
     "accepts": "^2.0.0",
     "append-field": "^1.0.0",
