@@ -2,6 +2,7 @@
 import React from 'react';
 import ProblemsGrid from "../../components/Box/ProblemsGrid";
 import { useEffect, useState } from 'react';
+import Navbar from "../../components/navbar/navbar";
 
 export default function Learn() {
   const [problems, setProblems] = useState([]);
@@ -30,12 +31,12 @@ export default function Learn() {
 
   return (
     <div>
-      <h1>Learn</h1>
-      <main style={{ padding: 32 }}></main>
-
-
-      <ProblemsGrid items={problems} initialCount={12} pageSize={12} />
-      
+      <Navbar />
+      <main style={{ marginLeft: "6rem", padding: "2rem" }}>
+        <h1>Learn</h1>
+        <ProblemsGrid items={problems} initialCount={12} pageSize={12} />
+      </main>
     </div>
   );
 }
+
