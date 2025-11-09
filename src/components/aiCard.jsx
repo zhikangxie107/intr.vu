@@ -180,7 +180,7 @@ const css = `
   border-radius: 12px;
   display: flex;
   flex-direction: column;
-  min-width: 280px;
+  min-width: 590px;
   box-shadow: 0 1px 2px rgba(16,24,40,.03);
   overflow: hidden;
 }
