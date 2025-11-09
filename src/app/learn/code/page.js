@@ -19,8 +19,7 @@ const GET_SESSION_ENDPOINT = '/api/session/getSession/';   // note trailing slas
 const COMPLETE_SESSION_ENDPOINT = '/api/session/completeSession/';
 
 export default function InterviewPage() {
-  const searchParams = useSearchParams();
-  const name = searchParams.get('name'); // e.g., "Two Sum"
+  const [name, setName] = useState('');
   const { user, isAuthenticated, isLoading } = useAuth0();
   const displayName = useMemo(() => {
     if (isLoading) return null;
@@ -290,6 +289,13 @@ if __name__ == "__main__":
 
     return () => { cancelled = true; ac.abort(); };
   }, [name]);
+
+  // getting search param
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setName(params.get("name") ?? "");
+  }, []);
 
   // Create session for this user + problem (waits for displayName)
   useEffect(() => {

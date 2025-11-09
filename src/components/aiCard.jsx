@@ -10,7 +10,7 @@ import { FaMicrophone, FaMicrophoneSlash } from 'react-icons/fa';
  *  - sttEndpoint?: string  (default '/api/whisper')
  *  - name?: string         (default 'Mark')
  *  - avatarUrl?: string
- */
+ */ 
 export default function AICard({
   onTranscript,
   answer = '',
