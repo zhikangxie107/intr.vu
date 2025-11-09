@@ -7,6 +7,7 @@ import { faHouse, faChalkboard, faUser } from "@fortawesome/free-solid-svg-icons
 
 
 const Navbar = () => {
+  console.log("Navbar rendered");
   return (
     <nav className="navbar">
       <ul className="nav-links top-links">
