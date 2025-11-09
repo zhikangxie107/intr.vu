@@ -1,0 +1,61 @@
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;       /* full height */
+  width: 6rem;        /* adjust as needed */
+  background-color: #F2F3F5;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between; /* pushes bottom-links down */
+  padding: 20px 0;
+  align-items: center; /* centers items horizontally */
+}
+
+.nav-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.nav-links li {
+  margin: 10px 0;
+}
+
+.nav-links a {
+  color: black;
+  text-decoration: none;
+  display: flex;                 /* center the icon */
+  align-items: center;           
+  justify-content: center;
+  width: 3rem;                   /* square width */
+  height: 3rem;                  /* same as width for perfect circle */
+  border-radius: 50%;            /* makes it a circle */
+  transition: background 0.2s, transform 0.1s;
+  
+}
+
+.nav-links a:hover {
+  background-color: #adadad;
+  transition: background 0.2s, transform 0.1s;
+  transform: scale(1.05); /* slight pop effect */
+}
+
+.divider {
+  border: none;             /* remove default border */
+  height: 2px;              /* thickness of the line */
+  background-color: #555;   /* line color */
+  margin: 2rem auto;            /* spacing above and below */
+  width: 100%; 
+  
+}
+
+@media (max-width: 768px) {
+  .navbar {
+    width: 4rem;
+  }
+
+  main {
+    margin-left: 4rem;
+  }
+}

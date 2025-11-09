@@ -1,4 +1,6 @@
 'use client';
+import React from 'react';
+import ProblemsGrid from "../../components/Box/ProblemsGrid";
 
 import React from 'react';
 import ProblemsGrid from "../../components/Box/ProblemsGrid";
