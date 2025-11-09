@@ -231,5 +231,127 @@ router.post('/richAsk', async (req, res) => {
     return res.status(500).json({ error: 'Failed to call OpenAI (RichAsk)' });
   }
 });
+router.post('/richReview', async (req, res) => {
+  try {
+    const { sessionId, categories } = req.body ?? {};
+    if (!sessionId || typeof sessionId !== 'string') {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    // ✅ Do NOT select created_at / updated_at unless they exist
+    const { data: session, error: selErr } = await supabase
+      .from('sessions')
+      .select('id, username, question_name, code_content, chat_log, status')
+      .eq('id', sessionId)
+      .single();
+
+    if (selErr || !session) {
+      return res.status(404).json({ error: 'Session not found', details: selErr });
+    }
+
+    const qname = session.question_name || 'unknown-question';
+    const code  = tail(session.code_content || '', 12000);
+
+    const recentChat = formatRecentChat(session.chat_log || [], {
+      keepLastN: 30,
+      charCap: 6000,
+      perMsgCap: 600,
+      allowRoles: ['user', 'assistant', 'system', 'tool', 'interviwer'], // your custom role
+      roleLabels: { user: 'USER', assistant: 'ASSISTANT', interviwer: 'INTERVIEWER', system: 'SYSTEM', tool: 'TOOL' },
+    });
+
+    const qobj = getQuestionByName(qname);
+    const questionBlock = formatQuestionBlock(qname, qobj, 2500);
+
+    const rubric = Array.isArray(categories) && categories.length
+      ? categories
+      : [
+          'Problem Understanding',
+          'Correctness & Edge Cases',
+          'Algorithmic Complexity',
+          'Code Quality & Readability',
+          'Testing Strategy',
+          'Communication & Reasoning'
+        ];
+
+    let contextBlock = `${questionBlock}\n`;
+    if (recentChat) contextBlock += `\nInterview chat (truncated):\n${recentChat}\n`;
+    if (code)       contextBlock += `\nCandidate code (truncated):\n\`\`\`\n${code}\n\`\`\`\n`;
+
+    const reviewerSystem = `
+You are a senior interview reviewer. Provide a calm, actionable evaluation.
+Score each category from 0–10 (decimals allowed). Keep scores consistent with rationale.
+Be concise but specific. Avoid revealing full solutions.
+Return ONLY valid JSON matching the required schema.
+`.trim();
+
+    const userInstruction = `
+Review the interview for session "${sessionId}" (user: "${session.username || 'Unknown'}").
+Use the context below (question, chat, code).
+
+Categories to grade:
+${rubric.map((c,i)=>`${i+1}. ${c}`).join('\n')}
+
+Return STRICT JSON with this structure:
+{
+  "overall": number,
+  "categories": [
+    { "name": string, "score": number, "rationale": string }
+  ],
+  "strengths": [ string, ... ],
+  "issues": [ string, ... ],
+  "recommendations": [
+    { "priority": "high"|"medium"|"low", "action": string }
+  ],
+  "summary": string
+}
+
+Guidelines:
+- Base everything ONLY on the provided chat/code/question.
+- If code is clearly incomplete, say so and score accordingly.
+- If you are unsure, state assumptions.
+- Keep all text under 1500 words total.
+`.trim();
+
+    const resp = await client.chat.completions.create({
+      model: 'gpt-4o-mini',
+      temperature: 0.2,
+      response_format: { type: 'json_object' },
+      messages: [
+        { role: 'system', content: reviewerSystem },
+        { role: 'system', content: contextBlock },
+        { role: 'user', content: userInstruction },
+      ],
+      max_tokens: 900,
+    });
+
+    const raw = resp.choices?.[0]?.message?.content?.trim() || '{}';
+    let reviewJson;
+    try {
+      reviewJson = JSON.parse(raw);
+    } catch {
+      const m = raw.match(/\{[\s\S]*\}$/);
+      reviewJson = m ? JSON.parse(m[0]) : { error: 'Model did not return valid JSON', raw };
+    }
+
+    return res.json({
+      sessionId,
+      question: qname,
+      review: reviewJson,
+      rubric,
+      usage: resp.usage ?? null,
+      included: {
+        questionBlockChars: questionBlock.length,
+        recentChatChars: recentChat.length,
+        codeChars: code.length,
+        status: session.status || null,
+      },
+    });
+  } catch (err) {
+    console.error('RichReview error:', err?.status, err?.message || err);
+    return res.status(500).json({ error: 'Failed to call OpenAI (RichReview)' });
+  }
+});
+
 
 export default router;

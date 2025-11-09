@@ -60,12 +60,6 @@ router.post('/createSession', async (req, res) => {
 });
 
 
-/**
- * POST /completeSession
- * Body: { sessionId }  (preferred)
- *  —or— { username, questionName }  (fallback)
- * Effect: sets status='COMPLETED' and returns the updated row.
- */
 router.post('/completeSession', async (req, res) => {
   try {
     const { sessionId, username, questionName } = req.body || {};
@@ -74,29 +68,35 @@ router.post('/completeSession', async (req, res) => {
       return res.status(400).json({ error: 'Provide sessionId OR (username and questionName).' });
     }
 
-    let match = supabase.from('sessions').select('id,status,username,question_name').limit(1);
+    let match = supabase
+      .from('sessions')
+      .select('id,status,username,question_name')   // ✅ no created_at here
+      .limit(1);
 
     if (sessionId) {
       match = match.eq('id', sessionId);
     } else {
-      match = match.eq('username', username).eq('question_name', questionName);
+      match = match
+        .eq('username', username)
+        .eq('question_name', questionName)
+        .order('id', { ascending: false });        // ✅ deterministic “latest”
     }
 
-    const { data: found, error: findErr } = await match.single();
+    const { data: found, error: findErr } = await match.maybeSingle(); // ✅ safer when 0 rows
     if (findErr) {
-      // Not found or other db error
-      const code = findErr.code === 'PGRST116' ? 404 : 500; // PGRST116 = no rows
-      return res.status(code).json({ error: code === 404 ? 'Session not found' : 'Database error (lookup)', details: findErr });
+      return res.status(500).json({ error: 'Database error (lookup)', details: findErr });
+    }
+    if (!found) {
+      return res.status(404).json({ error: 'Session not found' });
     }
 
     if (found.status === 'COMPLETED') {
-      // Idempotent completion
-      return res.status(200).json(found);
+      return res.status(200).json(found); // idempotent
     }
 
     const { data: updated, error: updErr } = await supabase
       .from('sessions')
-      .update({ status: 'COMPLETED' }) // enum value must be uppercase
+      .update({ status: 'COMPLETED' }) // ensure this enum value exists in your schema
       .eq('id', found.id)
       .select()
       .single();
@@ -111,6 +111,7 @@ router.post('/completeSession', async (req, res) => {
     return res.status(500).json({ error: 'Unexpected server error' });
   }
 });
+
 
 /**
  * DELETE /session/:id

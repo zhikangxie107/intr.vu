@@ -1,34 +1,51 @@
 'use client';
-import { useRef, useState, useEffect } from 'react';
+import { useRef, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AICard from '../../../components/aiCard';
 import ProblemTemplate from '../../../components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
+import { useAuth0 } from "@auth0/auth0-react";
+import ReviewModal from '../../../components/ReviewModal';
+import { set } from '@elevenlabs/elevenlabs-js/core/schemas';
 
-const ASK_ENDPOINT = '/api/richAsk'; // takes in sessionID + prompt
+const ASK_ENDPOINT = '/api/richAsk';           // takes in sessionID + prompt
+const REVIEW_ENDPOINT = '/api/richReview';     // your endpoint
 const TTS_ENDPOINT = '/api/tts/';
 const SESSION_ENDPOINT = '/api/session/createSession';
 const CODE_UPLOAD_ENDPOINT = '/api/session/uploadCode';
 const APPEND_CHAT_ENDPOINT = '/api/session/appendChat';
-const GET_SESSION_ENDPOINT = '/api/session/getSession/';
+const GET_SESSION_ENDPOINT = '/api/session/getSession/';   // note trailing slash for /:id
+const COMPLETE_SESSION_ENDPOINT = '/api/session/completeSession/';
 
 export default function InterviewPage() {
   const searchParams = useSearchParams();
   const name = searchParams.get('name'); // e.g., "Two Sum"
+  const { user, isAuthenticated, isLoading } = useAuth0();
+  const displayName = useMemo(() => {
+    if (isLoading) return null;
+    if (!isAuthenticated || !user) return 'Guest';
+    return user.name || user.nickname || (user.email ? user.email.split('@')[0] : 'Guest');
+  }, [isLoading, isAuthenticated, user]);
+
+  const aiRef = useRef(null);
+  const [autoStartKey, setAutoStartKey] = useState(0);
 
   // Problem + editor state
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState('');
   const [problem, setProblem] = useState(null); // { meta, data }
   const [code, setCode] = useState('');
-  const [stdin, setStdin] = useState('');       // used by JDoodle run
+  const [stdin, setStdin] = useState('');
   const [output, setOutput] = useState('');
 
   // Chat/TTS state
   const [answer, setAnswer] = useState('');
   const [asking, setAsking] = useState(false);
   const [speaking, setSpeaking] = useState(false);
+
+  // Final review modal state
+  const [finalReview, setFinalReview] = useState(null);
 
   // audio lifecycle for TTS
   const audioRef = useRef(null);
@@ -79,7 +96,10 @@ export default function InterviewPage() {
     const audio = new Audio(url);
     audioRef.current = audio;
     setSpeaking(true);
-    audio.onended = () => setSpeaking(false);
+    audio.onended = () => {
+      setSpeaking(false);
+      setTimeout(() => aiRef.current?.startListening?.(), 250);
+    };
     audio.play().catch(() => setSpeaking(false));
   };
 
@@ -95,9 +115,7 @@ export default function InterviewPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionID, codeContent }),
       });
-      if (!res.ok) {
-        console.error('Code upload failed:', await res.text());
-      }
+      if (!res.ok) console.error('Code upload failed:', await res.text());
     } catch (e) {
       console.error('Unexpected error (uploadCode):', e);
     }
@@ -109,16 +127,84 @@ export default function InterviewPage() {
       return;
     }
     try {
-      const res = await fetch(APPEND_CHAT_ENDPOINT, { 
+      const res = await fetch(APPEND_CHAT_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId: sessionID, prompt, response }),
       });
-      if (!res.ok) {
-        console.error('Chat upload failed:', await res.text());
-      }
+      if (!res.ok) console.error('Chat upload failed:', await res.text());
     } catch (e) {
       console.error('Unexpected error (uploadChat):', e);
+    }
+  };
+
+  const endInterview = async () => {
+    console.log('Ending interview');
+    cleanupAudio();
+    if (!sessionID) {
+      setAnswer('No active session to complete.');
+      return;
+    }
+
+    setAsking(true);
+    setAnswer('');
+
+    try {
+      // 1) Mark session completed
+      const completeRes = await fetch(COMPLETE_SESSION_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionID }),
+      });
+      if (!completeRes.ok) {
+        const t = await completeRes.text();
+        setAnswer(`Could not complete session: ${t}`);
+        setAsking(false);
+        return;
+      }
+
+      // 2) Request final review
+      const reviewRes = await fetch(REVIEW_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionID }),
+      });
+      if (!reviewRes.ok) {
+        const t = await reviewRes.text();
+        setAnswer(`Review generation failed: ${t}`);
+        setAsking(false);
+        return;
+      }
+
+      const reviewPayload = await reviewRes.json();
+      const review = reviewPayload?.review || null;
+      setFinalReview(reviewPayload);
+
+      // 3) concise text summary for chat bubble
+      const overall = review?.overall != null ? review.overall : 'N/A';
+      const topCats = (review?.categories || []).slice(0, 3)
+        .map(c => `${c.name}: ${c.score}`)
+        .join(' • ');
+
+      const summaryLines = [
+        `Interview completed. Overall: ${overall}/10.`,
+        topCats ? `Top categories — ${topCats}.` : null,
+        review?.summary ? `Summary: ${review.summary}` : null,
+      ].filter(Boolean);
+
+      const summaryText = summaryLines.join('\n');
+
+      // 4) save to session chat
+      const promptToAppend = { role: 'system', content: 'Interview completed. Generated final review.' };
+      const responseToAppend = { role: 'interviwer', content: summaryText };
+      await uploadChat(promptToAppend, responseToAppend);
+
+      setAnswer(summaryText);
+    } catch (e) {
+      console.error(e);
+      setAnswer('Failed to finalize interview. See console for details.');
+    } finally {
+      setAsking(false);
     }
   };
 
@@ -126,7 +212,6 @@ export default function InterviewPage() {
   const handleTranscript = async (text) => {
     const prompt = (text || '').trim();
     if (!prompt) return;
-
     if (!sessionID) {
       setAnswer('Session not ready yet—please wait a moment and try again.');
       return;
@@ -149,7 +234,7 @@ export default function InterviewPage() {
       const textAnswer = typeof data === 'string' ? data : data.answer ?? '';
 
       const promptToAppend = { role: 'user', content: prompt };
-      const responseToAppend = { role: 'interviwer', content: textAnswer }; // keep your label
+      const responseToAppend = { role: 'interviwer', content: textAnswer };
       await uploadChat(promptToAppend, responseToAppend);
 
       setAnswer(textAnswer || '(no answer)');
@@ -163,8 +248,6 @@ export default function InterviewPage() {
   };
 
   // ---------- effects ----------
-
-  // Load problem data (prefer Python starter)
   useEffect(() => {
     if (!name) return;
 
@@ -186,7 +269,15 @@ export default function InterviewPage() {
 
         const pyStarter =
           json?.data?.starterCode?.py ??
-          `# Write your solution here\n\ndef two_sum(nums, target):\n    # TODO: implement\n    return [0, 0]\n\nif __name__ == "__main__":\n    print(two_sum([2,7,11,15], 9))\n`;
+          `# Write your solution here
+
+def two_sum(nums, target):
+    # TODO: implement
+    return [0, 0]
+
+if __name__ == "__main__":
+    print(two_sum([2,7,11,15], 9))
+`;
         setCode(pyStarter);
       } catch (e) {
         if (!cancelled && e?.name !== 'AbortError') {
@@ -200,15 +291,20 @@ export default function InterviewPage() {
     return () => { cancelled = true; ac.abort(); };
   }, [name]);
 
-  // Create session for this user + problem
+  // Create session for this user + problem (waits for displayName)
   useEffect(() => {
     if (!name) return;
+    if (isLoading) return;
+    if (!displayName) return;
+    if (sessionID) return;
+
     (async () => {
       try {
+        console.log('Creating session for', displayName, 'question:', name);
         const res = await fetch(SESSION_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: 'demoUser', questionName: name }),
+          body: JSON.stringify({ username: displayName, questionName: name }),
         });
         if (!res.ok) {
           console.error('Session creation failed:', await res.text());
@@ -220,9 +316,9 @@ export default function InterviewPage() {
         console.error('Session creation failed:', e);
       }
     })();
-  }, [name]);
+  }, [name, isLoading, displayName, sessionID]);
 
-  // first time sessionID is set make interviewer do a greeting prompt
+  // greeting after session creation
   useEffect(() => {
     if (!sessionID) return;
     const doGreeting = async () => {
@@ -233,12 +329,12 @@ export default function InterviewPage() {
     doGreeting();
   }, [sessionID]);
 
-  // use effect to call richAsk every 45 seconds with a progress question
+  // periodic nudge (progress question)
   useEffect(() => {
     if (!sessionID) return;
     const interval = setInterval(async () => {
       try {
-        const getSessionRes = await fetch(GET_SESSION_ENDPOINT + sessionID);
+        const getSessionRes = await fetch(`${GET_SESSION_ENDPOINT}${sessionID}`);
         if (!getSessionRes.ok) {
           console.error('Session fetch failed:', await getSessionRes.text());
           return;
@@ -250,7 +346,7 @@ export default function InterviewPage() {
       } catch (e) {
         console.error('Error in session polling:', e);
       }
-    }, 45000);
+    }, 90000);
     return () => clearInterval(interval);
   }, [sessionID, asking]);
 
@@ -314,6 +410,7 @@ export default function InterviewPage() {
         <div style={styles.leftPane}>
           <div>
             <AICard
+              ref={aiRef}
               answer={answer}
               loading={asking}
               onTranscript={handleTranscript}
@@ -328,7 +425,6 @@ export default function InterviewPage() {
         {/* Right: Editor + Output */}
         <div style={styles.rightPane}>
           <div style={styles.editorContainer}>
-            {/* toolbar line (Python 3 badge + stdin + Run) */}
             <div style={styles.toolbar}>
               <span style={styles.badge}>Python 3</span>
               <input
@@ -368,6 +464,12 @@ export default function InterviewPage() {
                 >
                   Stop
                 </button>
+                <button
+                  style={styles.secondaryBtn}
+                  onClick={endInterview}
+                >
+                  End Interview
+                </button>
               </div>
             </div>
             <pre style={styles.outputBox}>{output}</pre>
@@ -381,6 +483,15 @@ export default function InterviewPage() {
           </div>
         </div>
       </div>
+
+      {/* Final Review Modal */}
+      {finalReview && (
+        <ReviewModal
+          open={!!finalReview}
+          onClose={() => setFinalReview(null)}
+          reviewPayload={finalReview}
+        />
+      )}
     </div>
   );
 }
@@ -423,7 +534,7 @@ const styles = {
   rightPane: {
     flex: 1,
     display: 'grid',
-    gridTemplateRows: 'minmax(52vh, 520px) auto', // editor row then Output row
+    gridTemplateRows: 'minmax(52vh, 520px) auto',
     backgroundColor: '#f7f9fb',
     minHeight: '100vh',
   },
