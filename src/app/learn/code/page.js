@@ -6,9 +6,7 @@ import ProblemTemplate from '../../../components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 
-import AICard from '../../../components/aiCard';
-import ProblemTemplate from '../../../components/problemTemplate';
-
+	
 const ASK_ENDPOINT = '/api/ask';
 const TTS_ENDPOINT = '/api/tts/tts';
 
