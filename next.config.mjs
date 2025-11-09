@@ -4,8 +4,10 @@ const nextConfig = {
   reactCompiler: true,
   async rewrites() {
     return [
-      { 
-        source: "/api/:path((?!auth).*)", destination: 'https://intr-vu.onrender.com/' },
+      {
+        source: "/api/:path((?!auth).*)",
+        destination: "https://intr-vu.onrender.com/api/:path*", // <-- keep the path
+      },
     ];
   },
 };
