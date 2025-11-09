@@ -1,12 +1,11 @@
 'use client';
 import { useRef, useState, useEffect, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
-import AICard from '../../../components/aiCard';              // <= use '../../../components/AICard' if your file is capitalized
+import AICard from '../../../components/aiCard';
 import ProblemTemplate from '../../../components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
-import { javascript } from '@codemirror/lang-javascript';
+import { python } from '@codemirror/lang-python';
 
-	
 const ASK_ENDPOINT = '/api/ask';
 const TTS_ENDPOINT = '/api/tts';
 
@@ -19,11 +18,13 @@ export default function InterviewPage() {
   const [err, setErr] = useState('');
   const [problem, setProblem] = useState(null); // { meta, data }
   const [code, setCode] = useState('');
+  const [stdin, setStdin] = useState('');
   const [output, setOutput] = useState('');
 
   // Chat/TTS state
   const [answer, setAnswer] = useState('');
   const [asking, setAsking] = useState(false);
+  const [speaking, setSpeaking] = useState(false);
 
   // audio lifecycle for TTS
   const audioRef = useRef(null);
@@ -45,6 +46,7 @@ export default function InterviewPage() {
         ttsAbortRef.current = null;
       }
     } catch {}
+    setSpeaking(false);
   };
 
   const speak = async (text) => {
@@ -68,6 +70,8 @@ export default function InterviewPage() {
 
     const audio = new Audio(url);
     audioRef.current = audio;
+    setSpeaking(true);
+    audio.onended = () => setSpeaking(false);
     audio.play().catch(() => {});
   };
 
@@ -100,7 +104,7 @@ export default function InterviewPage() {
     }
   };
 
-  // ---- Problem fetch (yours, unchanged except for minor organization) ----
+  // ---- Problem fetch (unchanged except: prefer Python starter) ----
   const API_BASE = ''; // same origin
 
   useEffect(() => {
@@ -116,11 +120,10 @@ export default function InterviewPage() {
         const json = await res.json(); // -> { meta, data }
         setProblem(json);
 
-        const jsStarter =
-          json?.data?.starterCode?.js ??
-          json?.data?.starterCode?.ts ??
-          `function twoSum(nums, target) {\n  // TODO: implement\n  return [0, 0];\n}\n`;
-        setCode(jsStarter);
+        const pyStarter =
+          json?.data?.starterCode?.py ??
+          `# Write your solution here\n\ndef two_sum(nums, target):\n    # TODO: implement\n    return [0, 0]\n\nif __name__ == "__main__":\n    print(two_sum([2,7,11,15], 9))\n`;
+        setCode(pyStarter);
       } catch (e) {
         setErr(`Failed to load problem: ${e.message}`);
       } finally {
@@ -135,32 +138,43 @@ export default function InterviewPage() {
     return s && s.in ? s : null;
   }, [problem]);
 
-  // Very basic JS runner on the first sample input
-  const handleRun = () => {
+  // ---- JDoodle run (Python) ----
+  const handleRun = async () => {
     try {
-      if (!problem) throw new Error('No problem loaded.');
-      if (!firstSample) throw new Error('No sample case found.');
+      setOutput('Running on JDoodle…');
+      const res = await fetch('/api/runCode', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          script: code,
+          language: 'python3',
+          versionIndex: '4',
+          stdin: stdin || '',
+        }),
+      });
 
-      const fnMatch =
-        code.match(/function\s+([A-Za-z0-9_]+)\s*\(/) ||
-        code.match(/const\s+([A-Za-z0-9_]+)\s*=\s*\(/) ||
-        code.match(/export\s+function\s+([A-Za-z0-9_]+)\s*\(/);
-      const fnName = (fnMatch && fnMatch[1]) || 'twoSum';
+      const data = await res.json();
+      if (!res.ok) {
+        setOutput(`Error: ${data.error || JSON.stringify(data)}`);
+        return;
+      }
 
-      const { nums, target } = firstSample.in ?? {};
-      const callArgs =
-        nums !== undefined && target !== undefined
-          ? `${JSON.stringify(nums)}, ${JSON.stringify(target)}`
-          : Object.values(firstSample.in || {})
-              .map((v) => JSON.stringify(v))
-              .join(', ');
-
-      const runner = new Function(`${code}\nreturn (${fnName}(${callArgs}));`);
-      const result = runner();
-      setOutput(`Output: ${JSON.stringify(result)}`);
+      const lines = [
+        data.output ?? '',
+        '',
+        `status: ${data.statusCode}`,
+        data.cpuTime ? `cpuTime: ${data.cpuTime}` : '',
+        data.memory ? `memory: ${data.memory}` : '',
+      ].filter(Boolean);
+      setOutput(lines.join('\n'));
     } catch (e) {
       setOutput(`Error: ${e.message}`);
     }
+  };
+
+  const handleReplay = async () => {
+    if (!answer || asking || speaking) return;
+    await speak(answer);
   };
 
   if (!name) return <div style={{ padding: 24 }}>Missing query: <code>?name=...</code></div>;
@@ -186,6 +200,7 @@ export default function InterviewPage() {
               answer={answer}
               loading={asking}
               onTranscript={handleTranscript}
+              // your aicard already renders the interview chat bubble
             />
           </div>
 
@@ -197,10 +212,22 @@ export default function InterviewPage() {
         {/* Right: Editor + Output */}
         <div style={styles.rightPane}>
           <div style={styles.editorContainer}>
+            {/* toolbar line (Python 3 badge + stdin + Run) */}
+            <div style={styles.toolbar}>
+              <span style={styles.badge}>Python 3</span>
+              <input
+                value={stdin}
+                onChange={(e) => setStdin(e.target.value)}
+                placeholder="optional program input"
+                style={styles.stdin}
+              />
+              <button style={styles.runButton} onClick={handleRun}>Run</button>
+            </div>
+
             <CodeMirror
               value={code}
-              height="400px"
-              extensions={[javascript({ jsx: true })]}
+              height="46vh"
+              extensions={[python()]}
               onChange={(value) => setCode(value)}
               style={styles.codeMirror}
             />
@@ -209,7 +236,15 @@ export default function InterviewPage() {
           <div style={styles.outputContainer}>
             <div style={styles.outputHeader}>
               <span>Output</span>
-              <button style={styles.runButton} onClick={handleRun}>Run</button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button style={styles.runButton} onClick={handleRun}>Run</button>
+                <button style={styles.secondaryBtn} onClick={handleReplay} disabled={!answer || asking || speaking}>
+                  Replay
+                </button>
+                <button style={styles.secondaryBtn} onClick={cleanupAudio} disabled={!speaking}>
+                  Stop
+                </button>
+              </div>
             </div>
             <pre style={styles.outputBox}>{output}</pre>
           </div>
@@ -244,7 +279,7 @@ const styles = {
     scrollSnapType: 'x mandatory',
   },
   leftPane: {
-    flex: '0 0 50%',
+    flex: '0 0 50%',                 // same as before
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: '#fff',
@@ -261,19 +296,46 @@ const styles = {
     overflowY: 'auto',
     marginTop: 8,
   },
-  rightPane: {
-    flex: 1,
+ 	rightPane: {
+	flex: 1,
+	display: 'grid',
+	gridTemplateRows: 'minmax(52vh, 520px) auto', // editor row then Output row
+	backgroundColor: '#f7f9fb',
+	minHeight: '100vh',
+
+	},
+	editorContainer: {
+	borderBottom: '1px solid #e0e0e0',
+	background: '#fff',
+ 	padding: '8px 12px',
+	overflow: 'hidden',
+	},
+  toolbar: {
     display: 'flex',
-    flexDirection: 'column',
-    backgroundColor: '#f7f9fb',
+    alignItems: 'center',
+    gap: 10,
+    padding: '0 0 10px',
   },
-  editorContainer: {
+  badge: {
+    background: '#111827',
+    color: '#fff',
+    borderRadius: 6,
+    padding: '4px 8px',
+    fontSize: 12,
+    fontWeight: 700,
+  },
+  stdin: {
     flex: 1,
-    borderBottom: '1px solid #e0e0e0',
+    minWidth: 200,
+    padding: '6px 8px',
+    border: '1px solid #e5e7eb',
+    borderRadius: 8,
+    outline: 'none',
   },
   codeMirror: {
     fontSize: '14px',
-    fontFamily: 'monospace',
+    fontFamily:
+      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
   },
   outputContainer: {
     padding: '12px 16px',
@@ -289,17 +351,28 @@ const styles = {
   },
   runButton: {
     background: 'none',
-    border: '1px solid #111827',
+    border: '1px solid #16a34a',
+    color: '#16a34a',
     borderRadius: 8,
     padding: '6px 12px',
+    cursor: 'pointer',
+    fontWeight: 700,
+  },
+  secondaryBtn: {
+    background: 'none',
+    border: '1px solid #9ca3af',
+    color: '#374151',
+    borderRadius: 8,
+    padding: '6px 10px',
     cursor: 'pointer',
   },
   outputBox: {
     backgroundColor: '#f5f5f5',
     borderRadius: '6px',
-    minHeight: '60px',
+    minHeight: '230px',
     padding: '10px',
-    fontFamily: 'monospace',
+    fontFamily:
+      'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
     fontSize: '13px',
     whiteSpace: 'pre-wrap',
     color: '#222',
