@@ -1,16 +1,31 @@
 "use client";
 import Link from "next/link";
+import { useAuth0 } from "@auth0/auth0-react";
 
 export default function LoginPage() {
+  const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
+
+  // Optional redirect if already logged in
+  if (isAuthenticated) {
+    if (typeof window !== "undefined") {
+      window.location.href = "/";
+    }
+    return null;
+  }
+
   return (
     <div style={styles.page}>
       <div style={styles.card}>
         <h2 style={styles.title}>Welcome Back</h2>
         <p style={styles.subtitle}>Log in securely with Auth0</p>
 
-        <a href="/api/auth/login" style={styles.authButton}>
-          Continue with Auth0
-        </a>
+        <button
+          onClick={() => loginWithRedirect()}
+          style={styles.authButton}
+          disabled={isLoading}
+        >
+          {isLoading ? "Loading..." : "Continue with Auth0"}
+        </button>
 
         <p style={styles.switchText}>
           Don’t have an account?{" "}
@@ -63,6 +78,7 @@ const styles = {
     fontWeight: "600",
     fontSize: "15px",
     textDecoration: "none",
+    cursor: "pointer",
     transition: "background-color 0.2s ease",
   },
   switchText: {
