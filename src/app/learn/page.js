@@ -1,8 +1,8 @@
 import React from 'react';
 import styles from './page.module.css';
-import InfoBoxCarosel from '../components/Box/InfoBoxCarousel';
-import FeaturedCourseCard from '../components/Box/FeaturedCourseCard';
-import ProblemsGrid from "../components/Box/ProblemsGrid";
+import InfoBoxCarosel from '../../components/Box/InfoBoxCarousel';
+import FeaturedCourseCard from '../../components/Box/FeaturedCourseCard';
+import ProblemsGrid from "../../components/Box/ProblemsGrid";
 
 
 export default function Learn() {
