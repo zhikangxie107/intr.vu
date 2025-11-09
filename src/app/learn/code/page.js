@@ -1,96 +1,178 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import AICard from '../../../components/aiCard';
 import ProblemTemplate from '../../../components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
-import { python } from '@codemirror/lang-python';
+import { javascript } from '@codemirror/lang-javascript';
 
 export default function InterviewPage() {
-	const [code, setCode] = useState();
-	const [output, setOutput] = useState('');
+  const searchParams = useSearchParams();
+  const name = searchParams.get('name'); // e.g., "Two Sum"
 
-	const handleRun = () => {
-		try {
-			// Very simple sandboxed execution simulation
-			const fn = new Function(`${code}; return twoSum([2,7,11,15], 9);`);
-			const result = fn();
-			setOutput(`Output: ${JSON.stringify(result)}`);
-		} catch (err) {
-			setOutput(`Error: ${err.message}`);
-		}
-	};
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState('');
+  const [problem, setProblem] = useState(null); // { meta, data }
+  const [code, setCode] = useState('');
+  const [output, setOutput] = useState('');
 
-	// Sample problem data (can be replaced later)
-	const problemData = {
-		title: '1. Two Sum',
-		description: [
-			'Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.',
-			'You may assume that each input would have exactly one solution, and you may not use the same element twice.',
-			'You can return the answer in any order.',
-		],
-		examples: [
-			{
-				input: 'nums = [2,7,11,15], target = 9',
-				output: '[0,1]',
-				explanation: 'Because nums[0] + nums[1] == 9, we return [0, 1].',
-			},
-			{
-				input: 'nums = [3,2,4], target = 6',
-				output: '[1,2]',
-			},
-			{
-				input: 'nums = [3,3], target = 6',
-				output: '[0,1]',
-			},
-		],
-		constraints: [
-			'2 <= nums.length <= 10⁴',
-			'-10⁹ <= nums[i] <= 10⁹',
-			'-10⁹ <= target <= 10⁹',
-			'Only one valid answer exists.',
-		],
-	};
+  // Change this if your API lives elsewhere:
+  const API_BASE = ''; // same origin
+  // const API_BASE = 'http://localhost:5000/api/questions'; // if different server
 
-	return (
-		<div style={styles.page}>
-			{/* Main content */}
-			<div style={styles.main}>
-				{/* Left: AI + Problem */}
-				<div style={styles.leftPane}>
-					<div style={styles.aiCardContainer}>
-						<AICard />
-					</div>
-					<div style={styles.problemContainer}>
-						<ProblemTemplate {...problemData} />
-					</div>
-				</div>
+  useEffect(() => {
+    if (!name) return;
+    const fetchProblem = async () => {
+      setLoading(true);
+      setErr('');
+      setOutput('');
+      try {
+        const url = `${API_BASE}/api/questions/Question/${encodeURIComponent(name)}`;
+        const res = await fetch(url);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
+        }
+        const json = await res.json(); // -> { meta, data }
+        setProblem(json);
 
-				{/* Right: Editor + Output */}
-				<div style={styles.rightPane}>
-					<div style={styles.editorContainer}>
-						<CodeMirror
-							value={code}
-							height="400px"
-							extensions={[python()]}
-							onChange={(value) => setCode(value)}
-							style={styles.codeMirror}
-						/>
-					</div>
+        // Prefer JS starter code; fall back to TS or a tiny JS stub
+        const jsStarter =
+          json?.data?.starterCode?.js ??
+          json?.data?.starterCode?.ts ??
+          `function twoSum(nums, target) {\n  // TODO: implement\n  return [0, 0];\n}\n`;
 
-					<div style={styles.outputContainer}>
-						<div style={styles.outputHeader}>
-							<span>Output</span>
-							<button style={styles.runButton} onClick={handleRun}>
-								Run
-							</button>
-						</div>
-						<pre style={styles.outputBox}>{output}</pre>
-					</div>
-				</div>
-			</div>
-		</div>
-	);
+        setCode(jsStarter);
+      } catch (e) {
+        setErr(`Failed to load problem: ${e.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchProblem();
+  }, [name]);
+
+  // Pick the first sample (if present) to run against
+  const firstSample = useMemo(() => {
+    const s = problem?.data?.samples?.[0];
+    return s && s.in ? s : null;
+  }, [problem]);
+
+  // Very basic runner: evaluates user JS, then calls the detected function on sample input.
+  const handleRun = () => {
+    try {
+      if (!problem) throw new Error('No problem loaded.');
+      if (!firstSample) throw new Error('No sample case found.');
+
+      // Try to detect function name from starter code; fallback "twoSum"
+      const fnMatch =
+        code.match(/function\s+([A-Za-z0-9_]+)\s*\(/) ||
+        code.match(/const\s+([A-Za-z0-9_]+)\s*=\s*\(/) ||
+        code.match(/export\s+function\s+([A-Za-z0-9_]+)\s*\(/);
+      const fnName = (fnMatch && fnMatch[1]) || 'twoSum';
+
+      const { nums, target, ...rest } = firstSample.in;
+      const callArgs =
+        nums !== undefined && target !== undefined
+          ? `${JSON.stringify(nums)}, ${JSON.stringify(target)}`
+          : Object.values(firstSample.in)
+              .map((v) => JSON.stringify(v))
+              .join(', ');
+
+      // Build and run
+      const runner = new Function(
+        `${code}\nreturn (${fnName}(${callArgs}));`
+      );
+      const result = runner();
+      setOutput(`Output: ${JSON.stringify(result)}`);
+    } catch (e) {
+      setOutput(`Error: ${e.message}`);
+    }
+  };
+
+  if (!name) {
+    return <div style={{ padding: 24 }}>Missing query: <code>?name=...</code></div>;
+  }
+
+  if (loading) {
+    return <div style={{ padding: 24 }}>Loading “{name}”...</div>;
+  }
+
+  if (err) {
+    return <div style={{ padding: 24, color: 'crimson' }}>{err}</div>;
+  }
+
+  // Map API data to your ProblemTemplate props
+  const problemData = problem?.data
+    ? {
+        title: problem.data.title || name,
+        description: problem.data.description || [],
+        examples: problem.data.examples || [],
+        constraints: problem.data.constraints || [],
+      }
+    : { title: name, description: [], examples: [], constraints: [] };
+
+  return (
+    <div style={styles?.page || { padding: 16 }}>
+      <div style={styles?.main || { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        {/* Left: AI + Problem */}
+        <div style={styles?.leftPane || { display: 'grid', gap: 16 }}>
+          <div style={styles?.aiCardContainer || {}}>
+            <AICard />
+          </div>
+          <div style={styles?.problemContainer || {}}>
+            <ProblemTemplate {...problemData} />
+          </div>
+        </div>
+
+        {/* Right: Editor + Output */}
+        <div style={styles?.rightPane || { display: 'grid', gap: 16 }}>
+          <div style={styles?.editorContainer || {}}>
+            <CodeMirror
+              value={code}
+              height="400px"
+              extensions={[javascript({ jsx: true })]}
+              onChange={(value) => setCode(value)}
+              style={styles?.codeMirror || {}}
+            />
+          </div>
+
+          <div style={styles?.outputContainer || { border: '1px solid #e5e7eb', borderRadius: 8 }}>
+            <div
+              style={
+                styles?.outputHeader || {
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 12px',
+                  borderBottom: '1px solid #e5e7eb',
+                }
+              }
+            >
+              <span>Output</span>
+              <button
+                style={styles?.runButton || { padding: '6px 12px', border: '1px solid #111827', borderRadius: 8 }}
+                onClick={handleRun}
+              >
+                Run
+              </button>
+            </div>
+            <pre style={styles?.outputBox || { padding: 12, margin: 0, minHeight: 80, whiteSpace: 'pre-wrap' }}>
+              {output}
+            </pre>
+          </div>
+
+          {/* Optional: show meta */}
+          <div style={{ fontSize: 13, color: '#6b7280' }}>
+            <strong>Tag:</strong> {problem?.meta?.tag} &nbsp;|&nbsp; <strong>Difficulty:</strong>{' '}
+            {problem?.meta?.difficulty} &nbsp;|&nbsp; <strong>Duration:</strong> {problem?.meta?.duration} &nbsp;|&nbsp;{' '}
+            <strong>Likes:</strong> {problem?.meta?.likes}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
+
 
 const styles = {
 	page: {
