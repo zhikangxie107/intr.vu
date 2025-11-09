@@ -1,21 +1,22 @@
 "use client";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import styles from "./ProblemsGrid.module.css";
 
 /**
  * Props:
  * - items: Array<{
- *     id: string | number,
- *     title: string,
+ *     name: string,
+ *     id: string,
+ *     slug: string,
  *     tag?: string,
  *     duration?: string,
+ *     durationMinutes?: { min: number, max: number },
  *     likes?: number,
- *     difficulty?: "Beginner" | "Intermediate" | "Advanced" | string,
- *     startHref: string
+ *     difficulty?: "Beginner" | "Easy" | "Medium" | "Hard" | "Advanced" | string
  *   }>
- * - initialCount?: number   // how many to show at first (default 20)
- * - pageSize?: number       // how many to add per "Show more" click (default 20)
- * - renderItem?: (item) => ReactNode  // optional custom renderer; defaults to a simple card
+ * - initialCount?: number
+ * - pageSize?: number
+ * - renderItem?: (item) => ReactNode
  */
 export default function ProblemsGrid({
   items = [],
@@ -27,21 +28,28 @@ export default function ProblemsGrid({
   const [query, setQuery] = useState("");
   const [sortMode, setSortMode] = useState("none"); // "none" | "asc" | "desc"
 
+  // Difficulty order for sorting
   const difficultyRank = (d) => {
-    const m = { beginner: 0, intermediate: 1, advanced: 2 };
+    const m = {
+      beginner: 0,
+      easy: 1,
+      medium: 2,
+      hard: 3,
+      advanced: 4,
+    };
     if (!d) return 99;
     return m[String(d).toLowerCase()] ?? 99;
   };
 
   const processed = useMemo(() => {
-    // 1) filter by search query (title or tag)
+    // 1) filter by search query (name or tag)
     const q = query.trim().toLowerCase();
     let next = !q
       ? items
       : items.filter((it) => {
-          const title = (it.title ?? "").toLowerCase();
+          const name = (it.name ?? "").toLowerCase();
           const tag = (it.tag ?? "").toLowerCase();
-          return title.includes(q) || tag.includes(q);
+          return name.includes(q) || tag.includes(q);
         });
 
     // 2) sort by difficulty if selected
@@ -65,7 +73,7 @@ export default function ProblemsGrid({
   const canShowMore = visible < processed.length;
 
   // Reset pagination when filters change
-  React.useEffect(() => {
+  useEffect(() => {
     setVisible(initialCount);
   }, [query, sortMode, initialCount]);
 
@@ -123,13 +131,17 @@ export default function ProblemsGrid({
   );
 }
 
-/** Minimal default card if you don't pass renderItem */
+/** Default card for your meta-only items */
 function DefaultProblemCard({ item }) {
-  const { title, tag, duration, likes, difficulty, startHref } = item;
+  const { name, tag, duration, likes, difficulty } = item;
+
+  // New requirement: redirect to /learn/code with the problem name as a query param
+  const startHref = `/learn/code?name=${encodeURIComponent(name)}`;
+
   return (
-    <article className={styles.card} aria-label={`Problem: ${title}`}>
-      <h3 className={styles.title} title={title}>
-        {title}
+    <article className={styles.card} aria-label={`Problem: ${name}`}>
+      <h3 className={styles.title} title={name}>
+        {name}
       </h3>
 
       <div className={styles.bottom}>
@@ -154,12 +166,8 @@ function DefaultProblemCard({ item }) {
             </span>
           )}
         </div>
-        <a
-          className={styles.start}
-          href={startHref}
-          target={startHref?.startsWith("http") ? "_blank" : undefined}
-          rel={startHref?.startsWith("http") ? "noopener noreferrer" : undefined}
-        >
+
+        <a className={styles.start} href={startHref}>
           Start
         </a>
       </div>
