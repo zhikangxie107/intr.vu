@@ -1,13 +1,17 @@
 'use client';
-import { useRef, useState, useEffect, useMemo } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import AICard from '../../../components/aiCard';
 import ProblemTemplate from '../../../components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 
-const ASK_ENDPOINT = '/api/ask';
-const TTS_ENDPOINT = '/api/tts';
+const ASK_ENDPOINT = '/api/richAsk'; // takes in sessionID + prompt
+const TTS_ENDPOINT = '/api/tts/';
+const SESSION_ENDPOINT = '/api/session/createSession';
+const CODE_UPLOAD_ENDPOINT = '/api/session/uploadCode';
+const APPEND_CHAT_ENDPOINT = '/api/session/appendChat';
+const GET_SESSION_ENDPOINT = '/api/session/getSession/';
 
 export default function InterviewPage() {
   const searchParams = useSearchParams();
@@ -18,7 +22,7 @@ export default function InterviewPage() {
   const [err, setErr] = useState('');
   const [problem, setProblem] = useState(null); // { meta, data }
   const [code, setCode] = useState('');
-  const [stdin, setStdin] = useState('');
+  const [stdin, setStdin] = useState('');       // used by JDoodle run
   const [output, setOutput] = useState('');
 
   // Chat/TTS state
@@ -31,6 +35,10 @@ export default function InterviewPage() {
   const objectUrlRef = useRef(null);
   const ttsAbortRef = useRef(null);
 
+  // sessionID
+  const [sessionID, setSessionID] = useState(null);
+
+  // ---------- audio helpers ----------
   const cleanupAudio = () => {
     try {
       if (audioRef.current) {
@@ -72,21 +80,66 @@ export default function InterviewPage() {
     audioRef.current = audio;
     setSpeaking(true);
     audio.onended = () => setSpeaking(false);
-    audio.play().catch(() => {});
+    audio.play().catch(() => setSpeaking(false));
   };
 
-  // Called by AICard after Whisper returns text
+  // ---------- backend helpers ----------
+  const uploadCode = async (codeContent) => {
+    if (!sessionID) {
+      console.warn('uploadCode: missing sessionId, skipping');
+      return;
+    }
+    try {
+      const res = await fetch(CODE_UPLOAD_ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionID, codeContent }),
+      });
+      if (!res.ok) {
+        console.error('Code upload failed:', await res.text());
+      }
+    } catch (e) {
+      console.error('Unexpected error (uploadCode):', e);
+    }
+  };
+
+  const uploadChat = async (prompt, response) => {
+    if (!sessionID) {
+      console.warn('uploadChat: missing sessionId, skipping');
+      return;
+    }
+    try {
+      const res = await fetch(APPEND_CHAT_ENDPOINT, { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sessionID, prompt, response }),
+      });
+      if (!res.ok) {
+        console.error('Chat upload failed:', await res.text());
+      }
+    } catch (e) {
+      console.error('Unexpected error (uploadChat):', e);
+    }
+  };
+
+  // ---------- main ask pipeline ----------
   const handleTranscript = async (text) => {
     const prompt = (text || '').trim();
     if (!prompt) return;
 
+    if (!sessionID) {
+      setAnswer('Session not ready yet—please wait a moment and try again.');
+      return;
+    }
+
     setAsking(true);
     setAnswer('');
+    await uploadCode(code);
     try {
       const res = await fetch(ASK_ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt }),
+        body: JSON.stringify({ prompt, sessionId: sessionID }),
       });
       if (!res.ok) {
         setAnswer(`Ask failed: ${await res.text()}`);
@@ -94,6 +147,11 @@ export default function InterviewPage() {
       }
       const data = await res.json();
       const textAnswer = typeof data === 'string' ? data : data.answer ?? '';
+
+      const promptToAppend = { role: 'user', content: prompt };
+      const responseToAppend = { role: 'interviwer', content: textAnswer }; // keep your label
+      await uploadChat(promptToAppend, responseToAppend);
+
       setAnswer(textAnswer || '(no answer)');
       if (textAnswer) await speak(textAnswer);
     } catch (e) {
@@ -104,20 +162,26 @@ export default function InterviewPage() {
     }
   };
 
-  // ---- Problem fetch (unchanged except: prefer Python starter) ----
-  const API_BASE = ''; // same origin
+  // ---------- effects ----------
 
+  // Load problem data (prefer Python starter)
   useEffect(() => {
     if (!name) return;
-    const fetchProblem = async () => {
+
+    let cancelled = false;
+    const ac = new AbortController();
+
+    (async () => {
       setLoading(true);
       setErr('');
       setOutput('');
       try {
-        const url = `${API_BASE}/api/questions/Question/${encodeURIComponent(name)}`;
-        const res = await fetch(url);
+        const url = `/api/questions/Question/${encodeURIComponent(name)}`;
+        const res = await fetch(url, { signal: ac.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json(); // -> { meta, data }
+        if (cancelled) return;
+
         setProblem(json);
 
         const pyStarter =
@@ -125,20 +189,72 @@ export default function InterviewPage() {
           `# Write your solution here\n\ndef two_sum(nums, target):\n    # TODO: implement\n    return [0, 0]\n\nif __name__ == "__main__":\n    print(two_sum([2,7,11,15], 9))\n`;
         setCode(pyStarter);
       } catch (e) {
-        setErr(`Failed to load problem: ${e.message}`);
+        if (!cancelled && e?.name !== 'AbortError') {
+          setErr(`Failed to load problem: ${e?.message || 'unknown error'}`);
+        }
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    };
-    fetchProblem();
+    })();
+
+    return () => { cancelled = true; ac.abort(); };
   }, [name]);
 
-  const firstSample = useMemo(() => {
-    const s = problem?.data?.samples?.[0];
-    return s && s.in ? s : null;
-  }, [problem]);
+  // Create session for this user + problem
+  useEffect(() => {
+    if (!name) return;
+    (async () => {
+      try {
+        const res = await fetch(SESSION_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: 'demoUser', questionName: name }),
+        });
+        if (!res.ok) {
+          console.error('Session creation failed:', await res.text());
+          return;
+        }
+        const data = await res.json();
+        setSessionID(data.id);
+      } catch (e) {
+        console.error('Session creation failed:', e);
+      }
+    })();
+  }, [name]);
 
-  // ---- JDoodle run (Python) ----
+  // first time sessionID is set make interviewer do a greeting prompt
+  useEffect(() => {
+    if (!sessionID) return;
+    const doGreeting = async () => {
+      const greetingPrompt =
+        'Greet the candidate and ask them to describe their approach to solving the problem so far.';
+      await handleTranscript(greetingPrompt);
+    };
+    doGreeting();
+  }, [sessionID]);
+
+  // use effect to call richAsk every 45 seconds with a progress question
+  useEffect(() => {
+    if (!sessionID) return;
+    const interval = setInterval(async () => {
+      try {
+        const getSessionRes = await fetch(GET_SESSION_ENDPOINT + sessionID);
+        if (!getSessionRes.ok) {
+          console.error('Session fetch failed:', await getSessionRes.text());
+          return;
+        }
+        const sessionData = await getSessionRes.json();
+        if (sessionData.status === 'ACTIVE' && !asking) {
+          await handleTranscript('Ask me a question about my code progress.');
+        }
+      } catch (e) {
+        console.error('Error in session polling:', e);
+      }
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [sessionID, asking]);
+
+  // ---------- run code (JDoodle) ----------
   const handleRun = async () => {
     try {
       setOutput('Running on JDoodle…');
@@ -177,6 +293,7 @@ export default function InterviewPage() {
     await speak(answer);
   };
 
+  // ---------- render ----------
   if (!name) return <div style={{ padding: 24 }}>Missing query: <code>?name=...</code></div>;
   if (loading) return <div style={{ padding: 24 }}>Loading “{name}”...</div>;
   if (err) return <div style={{ padding: 24, color: 'crimson' }}>{err}</div>;
@@ -200,7 +317,6 @@ export default function InterviewPage() {
               answer={answer}
               loading={asking}
               onTranscript={handleTranscript}
-              // your aicard already renders the interview chat bubble
             />
           </div>
 
@@ -238,10 +354,18 @@ export default function InterviewPage() {
               <span>Output</span>
               <div style={{ display: 'flex', gap: 8 }}>
                 <button style={styles.runButton} onClick={handleRun}>Run</button>
-                <button style={styles.secondaryBtn} onClick={handleReplay} disabled={!answer || asking || speaking}>
+                <button
+                  style={styles.secondaryBtn}
+                  onClick={handleReplay}
+                  disabled={!answer || asking || speaking}
+                >
                   Replay
                 </button>
-                <button style={styles.secondaryBtn} onClick={cleanupAudio} disabled={!speaking}>
+                <button
+                  style={styles.secondaryBtn}
+                  onClick={cleanupAudio}
+                  disabled={!speaking}
+                >
                   Stop
                 </button>
               </div>
@@ -249,7 +373,7 @@ export default function InterviewPage() {
             <pre style={styles.outputBox}>{output}</pre>
           </div>
 
-          <div style={{ fontSize: 13, color: '#6b7280' }}>
+          <div style={{ fontSize: 13, color: '#6b7280', padding: '8px 16px' }}>
             <strong>Tag:</strong> {problem?.meta?.tag} &nbsp;|&nbsp;
             <strong>Difficulty:</strong> {problem?.meta?.difficulty} &nbsp;|&nbsp;
             <strong>Duration:</strong> {problem?.meta?.duration} &nbsp;|&nbsp;
@@ -279,7 +403,7 @@ const styles = {
     scrollSnapType: 'x mandatory',
   },
   leftPane: {
-    flex: '0 0 50%',                 // same as before
+    flex: '0 0 50%',
     display: 'flex',
     flexDirection: 'column',
     backgroundColor: '#fff',
@@ -296,20 +420,19 @@ const styles = {
     overflowY: 'auto',
     marginTop: 8,
   },
- 	rightPane: {
-	flex: 1,
-	display: 'grid',
-	gridTemplateRows: 'minmax(52vh, 520px) auto', // editor row then Output row
-	backgroundColor: '#f7f9fb',
-	minHeight: '100vh',
-
-	},
-	editorContainer: {
-	borderBottom: '1px solid #e0e0e0',
-	background: '#fff',
- 	padding: '8px 12px',
-	overflow: 'hidden',
-	},
+  rightPane: {
+    flex: 1,
+    display: 'grid',
+    gridTemplateRows: 'minmax(52vh, 520px) auto', // editor row then Output row
+    backgroundColor: '#f7f9fb',
+    minHeight: '100vh',
+  },
+  editorContainer: {
+    borderBottom: '1px solid #e0e0e0',
+    background: '#fff',
+    padding: '8px 12px',
+    overflow: 'hidden',
+  },
   toolbar: {
     display: 'flex',
     alignItems: 'center',
