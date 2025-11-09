@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
-import AICard from '@/app/components/aiCard';
-import ProblemTemplate from '@/app/components/problemTemplate';
+import AICard from '@/components/aiCard';
+import ProblemTemplate from '@/components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
 import { python } from '@codemirror/lang-python';
 

@@ -1,11 +1,17 @@
-// openaiRoute.js
-require('dotenv').config();
-const express = require('express');
-const { OpenAI } = require('openai');
+import dotenv from 'dotenv';
+import express from 'express';
+import { OpenAI } from 'openai';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
 
-// read systemprompt.txt and store in a variable
-const fs = require('fs');
-const path = require('path');
+dotenv.config();
+
+// Support __dirname in ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const systemPromptPath = path.join(__dirname, 'systemprompt.txt');
 const systemPrompt = fs.readFileSync(systemPromptPath, 'utf-8');
 
@@ -19,17 +25,12 @@ router.post('/ask', async (req, res) => {
     if (!prompt) return res.status(400).json({ error: 'prompt is required' });
 
     const response = await client.chat.completions.create({
-      // pick a small, speedy model
       model: 'gpt-4o-mini',
       temperature: 0.2,
-      max_tokens: 120,           // cap output length
-      // optional: stop early if the model starts another section
+      max_tokens: 120,
       stop: ['\n\n'],
       messages: [
-        {
-          role: 'system',
-          content:systemPrompt,
-        },
+        { role: 'system', content: systemPrompt },
         { role: 'user', content: prompt },
       ],
     });
@@ -42,4 +43,4 @@ router.post('/ask', async (req, res) => {
   }
 });
 
-module.exports = router;
+export default router;
