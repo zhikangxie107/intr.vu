@@ -6,6 +6,12 @@ import ProblemTemplate from '../../../components/problemTemplate';
 import CodeMirror from '@uiw/react-codemirror';
 import { javascript } from '@codemirror/lang-javascript';
 
+import AICard from '../../../components/aiCard';
+import ProblemTemplate from '../../../components/problemTemplate';
+
+const ASK_ENDPOINT = '/api/ask';
+const TTS_ENDPOINT = '/api/tts/tts';
+
 export default function InterviewPage() {
   const searchParams = useSearchParams();
   const name = searchParams.get('name'); // e.g., "Two Sum"
@@ -175,91 +181,82 @@ export default function InterviewPage() {
 
 
 const styles = {
-	page: {
-		display: 'flex',
-		height: '100vh',
-		width: '100vw',
-		fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-		backgroundColor: '#f5f7fa',
-		overflow: 'hidden',
-	},
-	main: {
-		flex: 1,
-		display: 'flex',
-		flexDirection: 'row',
-		overflowX: 'auto',
-		overflowY: 'hidden',
-		scrollSnapType: 'x mandatory',
-	},
-
-	leftPane: {
-		flex: '0 0 50%',
-		display: 'flex',
-		flexDirection: 'column', // stack vertically now
-		justifyContent: 'space-between',
-		backgroundColor: '#fff',
-		borderRight: '1px solid #e0e0e0',
-		padding: '24px',
-		height: '100vh',
-		boxSizing: 'border-box',
-		overflow: 'hidden', // prevent vertical scroll
-		scrollSnapAlign: 'start',
-		gap: '20px',
-	},
-
-	aiCardContainer: {
-		flex: '0 0 40%', // top portion
-		display: 'flex',
-		justifyContent: 'center',
-		alignItems: 'center',
-	},
-
-	problemContainer: {
-		flex: '1', // remaining height
-		overflowY: 'auto', // allows problem text to scroll internally
-	},
-	rightPane: {
-		flex: 1,
-		display: 'flex',
-		flexDirection: 'column',
-		backgroundColor: '#f7f9fb',
-	},
-	editorContainer: {
-		flex: 1,
-		borderBottom: '1px solid #e0e0e0',
-	},
-	codeMirror: {
-		fontSize: '14px',
-		fontFamily: 'monospace',
-	},
-	outputContainer: {
-		padding: '12px 16px',
-		backgroundColor: '#fff',
-		borderTop: '1px solid #e0e0e0',
-	},
-	outputHeader: {
-		display: 'flex',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		marginBottom: '8px',
-		fontWeight: '500',
-	},
-	runButton: {
-		background: 'none',
-		border: 'none',
-		color: '#22c55e',
-		fontWeight: '600',
-		cursor: 'pointer',
-		transition: 'color 0.2s ease',
-	},
-	outputBox: {
-		backgroundColor: '#f5f5f5',
-		borderRadius: '6px',
-		minHeight: '60px',
-		padding: '10px',
-		fontFamily: 'monospace',
-		fontSize: '13px',
-		whiteSpace: 'pre-wrap',
-		color: '#222',
-	},
+  page: {
+    display: 'flex',
+    height: '100vh',
+    width: '100vw',
+    fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    backgroundColor: '#f5f7fa',
+    overflow: 'hidden',
+  },
+  main: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'row',
+    overflowX: 'auto',
+    overflowY: 'hidden',
+    scrollSnapType: 'x mandatory',
+  },
+  leftPane: {
+    flex: '0 0 50%',
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: '#fff',
+    borderRight: '1px solid #e0e0e0',
+    padding: '24px',
+    height: '100vh',
+    boxSizing: 'border-box',
+    overflow: 'hidden',
+    scrollSnapAlign: 'start',
+    gap: '16px',
+  },
+  problemContainer: {
+    flex: 1,
+    overflowY: 'auto',
+    marginTop: 8,
+  },
+  rightPane: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    backgroundColor: '#f7f9fb',
+  },
+  editorContainer: {
+    flex: 1,
+    borderBottom: '1px solid #e0e0e0',
+  },
+  codeMirror: {
+    fontSize: '14px',
+    fontFamily: 'monospace',
+  },
+  outputContainer: {
+    padding: '12px 16px',
+    backgroundColor: '#fff',
+    borderTop: '1px solid #e0e0e0',
+  },
+  outputHeader: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: '8px',
+    fontWeight: '500',
+  },
+  runButton: {
+    background: 'none',
+    border: 'none',
+    color: '#22c55e',
+    fontWeight: '600',
+    cursor: 'pointer',
+    transition: 'color 0.2s ease',
+  },
+  outputBox: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: '6px',
+    minHeight: '60px',
+    padding: '10px',
+    fontFamily: 'monospace',
+    fontSize: '13px',
+    whiteSpace: 'pre-wrap',
+    color: '#222',
+  },
 };
