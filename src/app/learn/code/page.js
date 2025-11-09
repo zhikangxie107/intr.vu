@@ -8,7 +8,7 @@ import { javascript } from '@codemirror/lang-javascript';
 
 	
 const ASK_ENDPOINT = '/api/ask';
-const TTS_ENDPOINT = '/api/tts/tts';
+const TTS_ENDPOINT = '/api/tts';
 
 export default function InterviewPage() {
   const searchParams = useSearchParams();
