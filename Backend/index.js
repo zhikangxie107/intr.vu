@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import OpenAIrouter from "./OpenAi/test.js";
 import ElevenLabsrouter from "./ElevenLabs/tts.js";
 import whisperRoute from "./WhisperAi/whisper.js";
+import questionsRouter from "./Questions/questions.js";
 
 
 dotenv.config();
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use("/api", OpenAIrouter);
 app.use("/api/tts", ElevenLabsrouter);
 app.use("/api/whisper", whisperRoute);
+app.use("/api/questions", questionsRouter);
 
 
 app.get("/", (_req, res) => {

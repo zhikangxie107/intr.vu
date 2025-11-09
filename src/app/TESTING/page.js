@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import MicRecorder from '../components/MicRecorder'; // adjust path if needed
+import MicRecorder from '../../components/MicRecorder'; // adjust path if needed
 
 // Centralize endpoints so you can change them in one place
 const ASK_ENDPOINT = '/api/ask';
