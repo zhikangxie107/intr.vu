@@ -1,0 +1,21 @@
+.card {
+  background: #edf0f2;
+  border-radius: 20px;
+  padding: 18px 22px;        /* tighter */
+  min-width: 250px;          /* good for multi-per-view */
+  max-width: 320px;          /* optional: keep consistent width */
+  min-height: 250px;         /* slightly shorter */
+  display: grid;
+  place-items: center;
+  row-gap: 25px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.title {
+  font-size: 24px;           /* smaller */
+  font-weight: 700;
+}
+.subtitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #111;
+}
