@@ -1,83 +1,71 @@
 "use client";
 import Link from "next/link";
 import { useAuth0 } from "@auth0/auth0-react";
-import Navbar from "../components/navbar/navbar";
+import { Mic, Keyboard, BarChart3 } from "lucide-react";
 
 
 export default function HomePage() {
-  const { isAuthenticated, isLoading, loginWithRedirect } = useAuth0();
+  const { isAuthenticated, loginWithRedirect } = useAuth0();
 
-  // CTA logic
-  const primaryCta = isAuthenticated
-    ? { type: "link", label: "Continue learning", href: "/learn" }
-    : { type: "action", label: "Log in to Console" };
+  const primaryCta =
+    isAuthenticated
+      ? { type: "link", label: "Continue learning", href: "/learn" }
+      : { type: "action", label: "Log in to Console" };
 
   const handlePrimary = async () => {
-    if (!isAuthenticated) {
-      // Go to Auth0 OAuth
-      await loginWithRedirect();
-    }
+    if (!isAuthenticated) await loginWithRedirect();
+  };
+
+  const handleSignup = async () => {
+    await loginWithRedirect({ authorizationParams: { screen_hint: "signup" } });
   };
 
   return (
-    <div style={styles.page}>
-      <Navbar></Navbar>
-        
+    <div style={S.page}>
+      {/* BRAND (top-left) */}
+      <header style={S.header}>
+        <Link href="/" style={S.brand}>intr.vu</Link>
+      </header>
 
-      <main style={styles.hero}>
-        <div style={styles.left}>
-          <h1 style={styles.title}>
-            Interview prep that’s<br />
-            <span style={styles.accent}>fast, focused,</span> and minimal.
+      {/* HERO: left copy, right preview (no graph) */}
+      <section style={S.hero}>
+        <div style={S.heroLeft}>
+          <h1 style={S.title}>
+            Interview prep that’s <span style={S.accent}>fast</span> and <span style={S.accent}>effective</span>
           </h1>
-          <p style={styles.subtitle}>
-            Code + voice practice with clean scoring and simple feedback.
+          <p style={S.sub}>
+            Conversational AI interviews, in-browser coding, and actionable feedback.
           </p>
 
-          <div style={styles.ctaRow}>
+          <div style={S.ctaRow}>
             {primaryCta.type === "link" ? (
-              <Link href={primaryCta.href} style={styles.primaryBtn}>
-                {primaryCta.label}
-              </Link>
+              <Link href={primaryCta.href} style={S.primary}>{primaryCta.label}</Link>
             ) : (
-              <button onClick={handlePrimary} style={styles.primaryBtn}>
-                {primaryCta.label}
-              </button>
+              <button onClick={handlePrimary} style={S.primary}>{primaryCta.label}</button>
             )}
-
             {!isAuthenticated && (
-              <button
-                onClick={() =>
-                  loginWithRedirect({
-                    authorizationParams: { screen_hint: "signup" },
-                  })
-                }
-                style={styles.secondaryBtn}
-              >
-                Create account
-              </button>
+              <button onClick={handleSignup} style={S.secondary}>Create account</button>
             )}
           </div>
-
-          {!isLoading && (
-            <div style={styles.metaRow}>
-              <span style={styles.meta}>No clutter UI</span>
-              <span style={styles.dot} />
-              <span style={styles.meta}>Voice or text</span>
-              <span style={styles.dot} />
-              <span style={styles.meta}>Round scoring</span>
-            </div>
-          )}
         </div>
 
-        {/* minimal right panel (optional placeholder) */}
-        <div style={styles.right}>
-          <div style={styles.panel}>
-            <div style={styles.panelHeader}>Preview</div>
-            <div style={styles.panelBody}>
-              <div style={styles.badge}>Python 3</div>
-              <div style={styles.codeBox}>
-                <pre style={styles.code}>
+        {/* Simple preview card to balance layout (no node graph) */}
+        <div style={S.heroRight} aria-hidden>
+          <div style={S.previewCard}>
+            <div style={S.previewHeader}>
+              <span style={S.dot} /><span style={S.dot} /><span style={S.dot} />
+              <span style={S.previewTitle}>Live Round Preview</span>
+            </div>
+            <div style={S.previewBody}>
+              <div style={S.badge}>Python 3</div>
+              <div style={S.transcript}>
+                <div style={S.role}>Interviewer</div>
+                <div style={S.text}>Walk me through an O(n) approach to Two Sum.</div>
+                <div style={S.roleUser}>You</div>
+                <div style={S.text}>Use a hash map of seen values and check target − n…</div>
+              </div>
+              <div style={S.codeBox}>
+                <pre style={S.code}>
 {`def two_sum(nums, target):
     seen = {}
     for i, n in enumerate(nums):
@@ -89,123 +77,138 @@ export default function HomePage() {
             </div>
           </div>
         </div>
-      </main>
+      </section>
 
-      <footer style={styles.footer}>
-        <div style={styles.footNote}>© {new Date().getFullYear()} intr.vu</div>
-      </footer>
+      {/* FEATURE STRIP (three items like the example) */}
+      <section style={S.features}>
+        <div style={S.featuresGrid}>
+          <Feature
+            icon={<Mic size={20} />}
+            title="Realistic Conversation"
+            sub="AI trained to mimic top interviwers"
+          />
+          <Feature
+            icon={<Keyboard size={20} />}
+            title="In-Browser Coding"
+            sub="Whiteboard and run your code in our editor"
+          />
+          <Feature
+            icon={<BarChart3 size={20} />}
+            title="Round Scoring"
+            sub="Clear feedback and notes to help you improve"
+          />
+        </div>
+      </section> 
     </div>
   );
 }
 
-/* ---------- Minimal inline styles (white + light blue) ---------- */
-const styles = {
+function Feature({ icon, title, sub }) {
+  return (
+    <div style={S.featureItem}>
+      <div style={S.featureIcon}>{icon}</div>
+      <div>
+        <div style={S.featureTitle}>{title}</div>
+        <div style={S.featureSub}>{sub}</div>
+      </div>
+    </div>
+  );
+}
+
+const S = {
+  /* Page + brand */
   page: {
+    minHeight: "100vh",
     display: "flex",
     flexDirection: "column",
-    minHeight: "100vh",
-    backgroundColor: "#f5f7fa",
+    background: "#f5f7fa",          // your light bg
     color: "#0f172a",
     fontFamily: "'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
   },
-
-
-  brand: { fontWeight: 800, letterSpacing: 0.2, color: "#2563eb" },
-  linkBtn: {
-    background: "none",
-    border: "1px solid #d1d5db",
-    color: "#111827",
-    padding: "8px 12px",
-    borderRadius: 8,
-    fontWeight: 600,
-    cursor: "pointer",
+  header: { padding: "16px 24px" },
+  brand: {
+    fontWeight: 900,
+    fontSize: 32,
+    letterSpacing: 0.4,
+    color: "#0f172a",
     textDecoration: "none",
   },
 
+  /* Hero layout */
   hero: {
+    flex: .5,
     display: "grid",
     gridTemplateColumns: "1.1fr 1fr",
     gap: 24,
-    padding: "48px 24px",
-    maxWidth: 1400,
+    alignItems: "center",
+    padding: "24px",
+    maxWidth: 1200,
     width: "100%",
     margin: "0 auto",
-    flex: 1,
   },
-  left: { alignSelf: "center" },
+  heroLeft: { maxWidth: 640 },
+  heroRight: { display: "flex", justifyContent: "center" },
+
+  /* Copy */
   title: {
     margin: 0,
-    fontSize: "clamp(32px, 4.2vw, 48px)",
-    lineHeight: 1.1,
-    fontWeight: 800,
+    fontSize: "clamp(34px, 5vw, 52px)",
+    lineHeight: 1.08,
+    fontWeight: 900,
   },
-  accent: { color: "#2563eb" },
-  subtitle: {
-    marginTop: 12,
+  accent: { color: "#74CAF2" },     // your accent blue
+  sub: {
+    marginTop: 10,
     color: "#475569",
     fontSize: 16,
-    maxWidth: 560,
   },
-  ctaRow: { display: "flex", gap: 12, marginTop: 20 },
-  primaryBtn: {
-    background: "#2563eb",
+
+  /* CTAs */
+  ctaRow: { display: "flex", gap: 10, marginTop: 18, flexWrap: "wrap" },
+  primary: {
+    background: "#74CAF2",
     color: "#fff",
-    border: "1px solid #2563eb",
+    border: "1px solid #74CAF2",
     borderRadius: 10,
     padding: "10px 14px",
-    fontWeight: 700,
+    fontWeight: 800,
     cursor: "pointer",
     textDecoration: "none",
   },
-  secondaryBtn: {
+  secondary: {
     background: "#fff",
     color: "#1f2937",
     border: "1px solid #d1d5db",
     borderRadius: 10,
     padding: "10px 12px",
-    fontWeight: 600,
+    fontWeight: 700,
     cursor: "pointer",
   },
-  metaRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    marginTop: 14,
-    color: "#6b7280",
-    fontSize: 14,
-  },
-  meta: { padding: "2px 0" },
-  dot: {
-    width: 4,
-    height: 4,
-    borderRadius: "50%",
-    background: "#cbd5e1",
-    display: "inline-block",
-  },
 
-  right: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  panel: {
+  /* Preview card (simple, no graph) */
+  previewCard: {
     width: "100%",
-    maxWidth: 480,
+    maxWidth: 520,
     background: "#fff",
     border: "1px solid #e5e7eb",
     borderRadius: 14,
-    boxShadow: "0 6px 18px rgba(0,0,0,0.05)",
+    boxShadow: "0 8px 24px rgba(0,0,0,.06)",
+    overflow: "hidden",
   },
-  panelHeader: {
-    padding: "12px 14px",
+  previewHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "10px 12px",
     borderBottom: "1px solid #e5e7eb",
-    fontWeight: 600,
-    color: "#111827",
+    background: "#fbfdff",
   },
-  panelBody: { padding: 14 },
+  dot: { width: 8, height: 8, borderRadius: 8, background: "#e5e7eb" },
+  previewTitle: { marginLeft: 8, fontSize: 12, color: "#64748b", fontWeight: 700 },
+  previewBody: { padding: 14 },
   badge: {
     display: "inline-block",
-    background: "#111827",
+    background: "#0f172a",
     color: "#fff",
     borderRadius: 6,
     padding: "4px 8px",
@@ -213,6 +216,16 @@ const styles = {
     fontWeight: 700,
     marginBottom: 10,
   },
+  transcript: {
+    background: "#f8fafc",
+    border: "1px solid #e5e7eb",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 10,
+  },
+  role: { fontSize: 12, fontWeight: 800, color: "#0f172a" },
+  roleUser: { fontSize: 12, fontWeight: 800, color: "#74CAF2" },
+  text: { fontSize: 13, color: "#334155", marginTop: 4 },
   codeBox: {
     background: "#f7f9fb",
     border: "1px solid #e5e7eb",
@@ -229,15 +242,38 @@ const styles = {
     color: "#111827",
   },
 
+  /* Feature row (like the bottom row in the image) */
+  features: { padding: "16px 24px 24px" },
+  featuresGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(3, 1fr)",
+    gap: 14,
+    maxWidth: 1200,
+    margin: "0 auto",
+  },
+  featureItem: {
+    display: "flex",
+    gap: 12,
+    alignItems: "flex-start",
+    background: "#ffffff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 14,
+  },
+  featureIcon: { fontSize: 20, lineHeight: 1 },
+  featureTitle: { fontWeight: 800, marginBottom: 2 },
+  featureSub: { color: "#475569", fontSize: 13.5 },
+
+  /* Footer */
   footer: {
     borderTop: "1px solid #e5e7eb",
     background: "#fff",
-    padding: "10px 24px",
+    padding: "10px 16px",
     display: "flex",
     justifyContent: "center",
   },
   footNote: { color: "#6b7280", fontSize: 13 },
 
-  /* responsive */
-  "@media (max-width: 960px)": {}, // (left here if you want to add rules)
+  /* Responsive */
+  "@media (maxWidth: 960px)": {},
 };
