@@ -11,7 +11,7 @@ import SessionRouter from "./InterviewSession/Session.js";
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 5000;
+const PORT = Number(process.env.PORT) || 5050;
 
 app.use(express.json());
 
