@@ -6,7 +6,10 @@ const nextConfig = {
     return [
       {
         source: "/api/:path((?!auth).*)",
-        destination: "https://intr-vu.onrender.com/api/:path*", // <-- keep the path
+        destination:
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:5050/api/:path*" // Dev API
+            : "https://intr-vu.onrender.com/api/:path*", // Prod API
       },
     ];
   },
